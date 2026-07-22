@@ -48,12 +48,71 @@ namespace DCFApixels.DragonECS
     {
         void Destroy();
     }
+    [MetaName(nameof(Run))]
+    [MetaColor(MetaColor.DragonRose)]
+    [MetaGroup(EcsConsts.PACK_GROUP, EcsConsts.PROCESSES_GROUP)]
+    [MetaDescription(EcsConsts.AUTHOR, "The process to run when EcsPipeline.Run<T>() or EcsPipeline.Run<T>(ref T data) is called.")]
+    [MetaID("DragonECS_1A9D428A9F01ACB558E2E73F07170C35")]
+    public interface IEcsRun<T> : IEcsProcess
+    {
+        void Run();
+    }
+    [MetaName(nameof(Run))]
+    [MetaColor(MetaColor.DragonRose)]
+    [MetaGroup(EcsConsts.PACK_GROUP, EcsConsts.PROCESSES_GROUP)]
+    [MetaDescription(EcsConsts.AUTHOR, "The process to run when EcsPipeline.Run<T>() or EcsPipeline.Run<T>(ref T data) is called.")]
+    [MetaID("DragonECS_C2AF428A9F0167A948ADC4828EB49A8E")]
+    public interface IEcsRunWithData<T> : IEcsProcess
+    {
+        void Run(ref T data);
+    }
+    public static class RunExt
+    {
+        public static void Run<T>(this EcsPipeline pipeline, ref T data)
+        {
+            pipeline.GetRunnerInstance<EcsRunWithDataRunner<T>>().Run(ref data);
+        }
+        public static void Run<T>(this EcsPipeline pipeline)
+        {
+            pipeline.GetRunnerInstance<EcsRunWithDataRunner<T>>().Run();
+        }
+    }
 }
 
 namespace DCFApixels.DragonECS.Core.Internal
 {
 #if ENABLE_IL2CPP
     using Unity.IL2CPP.CompilerServices;
+    [Il2CppSetOption(Option.NullChecks, false)]
+    [Il2CppSetOption(Option.ArrayBoundsChecks, false)]
+#endif
+    [MetaColor(MetaColor.DragonRose)]
+    [MetaGroup(EcsConsts.PACK_GROUP, EcsConsts.PROCESSES_GROUP)]
+    [MetaTags(MetaTags.HIDDEN)]
+    [MetaID("DragonECS_49C0418A9F018FDEE20929AA0AF80D77")]
+    internal class EcsRunWithDataRunner<T> : EcsRunner<IEcsRunWithData<T>>, IEcsRunWithData<T>
+    {
+        private EcsRunner<IEcsRun<T>>.RunHelper _helper;
+        private EcsRunner<IEcsRunWithData<T>>.RunHelper _helperWithData;
+        protected override void OnSetup()
+        {
+            _helper = new EcsRunner<IEcsRun<T>>.RunHelper(Pipeline.GetProcess<IEcsRun<T>>());
+            _helperWithData = new EcsRunner<IEcsRunWithData<T>>.RunHelper(Pipeline.GetProcess<IEcsRunWithData<T>>());
+        }
+        public void Run(ref T data)
+        {
+            _helper.Run(p => p.Run());
+            _helperWithData.Run((IEcsRunWithData<T> p, ref T d) => p.Run(ref d), ref data);
+        }
+        public void Run()
+        {
+            T data = default;
+            _helper.Run(p => p.Run());
+            _helperWithData.Run((IEcsRunWithData<T> p, ref T d) => p.Run(ref d), ref data);
+        }
+    }
+
+#if ENABLE_IL2CPP
     [Il2CppSetOption(Option.NullChecks, false)]
     [Il2CppSetOption(Option.ArrayBoundsChecks, false)]
 #endif

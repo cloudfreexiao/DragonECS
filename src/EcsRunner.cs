@@ -184,6 +184,27 @@ namespace DCFApixels.DragonECS
                     }
 #endif
                 }
+                public RunHelper(EcsProcess<TProcess> process) : this(process,
+#if DEBUG
+                    typeof(TProcess).GetMeta().Name)
+#else
+                    string.Empty)
+#endif
+                { }
+
+                public RunHelper(EcsProcess<TProcess> process, string methodName)
+                {
+                    _process = process;
+#if DEBUG
+                    _cacheCheck = null;
+                    _cacheCheckInit = false;
+                    _markers = new EcsProfilerMarker[_process.Length];
+                    for (int i = 0; i < _process.Length; i++)
+                    {
+                        _markers[i] = new EcsProfilerMarker($"{_process[i].GetMeta().Name}.{methodName}");
+                    }
+#endif
+                }
                 #endregion
 
                 #region Utils
