@@ -47,6 +47,7 @@ DragonECS - это [ECS](https://en.wikipedia.org/wiki/Entity_component_system) 
 ## Оглавление
 - [Установка](#установка)
 - [Расширения](#расширения)
+- [Быстрый старт](#быстрый-старт)
 - [Основные концепции](#основные-концепции)
   - [Entity](#entity)
   - [Component](#component)
@@ -128,6 +129,101 @@ https://github.com/DCFApixels/DragonECS.git
     * [Шаблоны кода IDE](https://gist.github.com/ctzcs/0ba948b0e53aa41fe1c87796a401660b) и [для Unity](https://gist.github.com/ctzcs/d4c7730cf6cd984fe6f9e0e3f108a0f1)
 > *Твое расширение? Если разрабатываешь расширение для DragonECS, пиши [сюда](#обратная-связь).
 
+
+# Быстрый старт
+Эти два скрипта собирают базовый рабочий цикл DragonECS: создание мира, построение пайплайна, внедрение зависимостей, запуск систем, запрос сущностей через аспект, изменение компонентов через пулы и освобождение ресурсов.
+
+**EcsRoot.cs**
+```c#
+using DCFApixels.DragonECS;
+using UnityEngine;
+
+public sealed class EcsRoot : MonoBehaviour
+{
+    private EcsWorld _world;
+    private EcsPipeline _pipeline;
+
+    private void Start()
+    {
+        // Мир хранит сущности и компоненты.
+        _world = new EcsWorld();
+
+        // Пайплайн хранит системы и управляет их жизненным циклом.
+        _pipeline = EcsPipeline.New()
+            // Внедряет зависимости в системы с IEcsInject<T>.
+            .Inject(_world)
+            // Добавляет системы проекта в нужном порядке.
+            .Add(new MovementSystem())
+            // Строит пайплайн и вызывает IEcsPreInit/IEcsInit.
+            .BuildAndInit();
+    }
+
+    private void Update()
+    {
+        // Вызывает IEcsRun.Run() у всех run-систем.
+        _pipeline.Run();
+    }
+
+    private void OnDestroy()
+    {
+        // Вызывает IEcsDestroy.Destroy() и освобождает ресурсы фреймворка.
+        _pipeline.Destroy();
+        _world.Destroy();
+    }
+}
+```
+
+**MovementSystem.cs**
+```c#
+using DCFApixels.DragonECS;
+
+public struct Pose : IEcsComponent
+{
+    public float X;
+    public float Y;
+}
+
+public struct Velocity : IEcsComponent
+{
+    public float X;
+    public float Y;
+}
+
+public struct FreezedTag : IEcsTagComponent { }
+
+public sealed class MovementSystem : IEcsRun, IEcsInject<EcsWorld>
+{
+    private EcsWorld _world;
+
+    private class Aspect : EcsAspect
+    {
+        // Inc: сущность должна иметь компонент, а пул кешируется.
+        public EcsPool<Pose> Poses = Inc;
+        public EcsPool<Velocity> Velocities = Inc;
+
+        // Exc: сущность не должна иметь компонент.
+        public EcsTagPool<FreezedTag> FreezedTags = Exc;
+    }
+
+    public void Inject(EcsWorld world)
+    {
+        _world = world;
+    }
+
+    public void Run()
+    {
+        // Where возвращает все сущности, подходящие под маску аспекта.
+        foreach (int e in _world.Where(out Aspect a))
+        {
+            ref Pose pose = ref a.Poses.Get(e);
+            ref readonly Velocity velocity = ref a.Velocities.Read(e);
+
+            pose.X += velocity.X;
+            pose.Y += velocity.Y;
+        }
+    }
+}
+```
 
 
 # Основные концепции

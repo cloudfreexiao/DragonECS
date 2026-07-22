@@ -49,6 +49,7 @@ The [ECS](https://en.wikipedia.org/wiki/Entity_component_system) Framework aims 
 ## Table of Contents
 - [Installation](#installation)
 - [Extensions](#extensions)
+- [Quick Start](#quick-start)
 - [Basic Concepts](#basic-concepts)
   - [Entity](#entity)
   - [Component](#component)
@@ -129,6 +130,101 @@ The framework sources can be copied directly into the project.
     * [One-Frame Components](https://gist.github.com/DCFApixels/46d512dbcf96c115b94c3af502461f60)
     * [Code Templates for IDE](https://gist.github.com/ctzcs/0ba948b0e53aa41fe1c87796a401660b) and [for Unity](https://gist.github.com/ctzcs/d4c7730cf6cd984fe6f9e0e3f108a0f1)
 > *Your extension? Extensions for DragonECS are welcome, you can share it [here](#feedback).
+
+# Quick Start
+These two scripts bring together the basic DragonECS workflow: create a world, build a pipeline, inject dependencies, run systems, query entities by an aspect, edit components through pools, and release resources.
+
+**EcsRoot.cs**
+```c#
+using DCFApixels.DragonECS;
+using UnityEngine;
+
+public sealed class EcsRoot : MonoBehaviour
+{
+    private EcsWorld _world;
+    private EcsPipeline _pipeline;
+
+    private void Start()
+    {
+        // World stores entities and components.
+        _world = new EcsWorld();
+
+        // Pipeline stores systems and controls their lifecycle.
+        _pipeline = EcsPipeline.New()
+            // Inject dependencies into systems implementing IEcsInject<T>.
+            .Inject(_world)
+            // Add project systems in the desired order.
+            .Add(new MovementSystem())
+            // Build pipeline and call IEcsPreInit/IEcsInit.
+            .BuildAndInit();
+    }
+
+    private void Update()
+    {
+        // Calls IEcsRun.Run() on all run systems.
+        _pipeline.Run();
+    }
+
+    private void OnDestroy()
+    {
+        // Calls IEcsDestroy.Destroy() and releases framework resources.
+        _pipeline.Destroy();
+        _world.Destroy();
+    }
+}
+```
+
+**MovementSystem.cs**
+```c#
+using DCFApixels.DragonECS;
+
+public struct Pose : IEcsComponent
+{
+    public float X;
+    public float Y;
+}
+
+public struct Velocity : IEcsComponent
+{
+    public float X;
+    public float Y;
+}
+
+public struct FreezedTag : IEcsTagComponent { }
+
+public sealed class MovementSystem : IEcsRun, IEcsInject<EcsWorld>
+{
+    private EcsWorld _world;
+
+    private class Aspect : EcsAspect
+    {
+        // Inc: entity must have the component and the pool is cached.
+        public EcsPool<Pose> Poses = Inc;
+        public EcsPool<Velocity> Velocities = Inc;
+
+        // Exc: entity must not have the component.
+        public EcsTagPool<FreezedTag> FreezedTags = Exc;
+    }
+
+    public void Inject(EcsWorld world)
+    {
+        _world = world;
+    }
+
+    public void Run()
+    {
+        // Where returns all entities matching the aspect mask.
+        foreach (int e in _world.Where(out Aspect a))
+        {
+            ref Pose pose = ref a.Poses.Get(e);
+            ref readonly Velocity velocity = ref a.Velocities.Read(e);
+
+            pose.X += velocity.X;
+            pose.Y += velocity.Y;
+        }
+    }
+}
+```
 
 # Basic Concepts
 ## Entity

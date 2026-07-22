@@ -49,6 +49,7 @@ DragonECS 是一个[实体组件系统](https://www.imooc.com/article/331544)框
 ## 目录
 - [安装](#安装)
 - [扩展](#扩展)
+- [快速开始](#快速开始)
 - [基础概念](#基础概念)
   - [实体](#实体)
   - [组件](#组件)
@@ -128,6 +129,101 @@ https://github.com/DCFApixels/DragonECS.git
     * [单帧组件](https://gist.github.com/DCFApixels/46d512dbcf96c115b94c3af502461f60)
     * [IDE代码模板](https://gist.github.com/ctzcs/0ba948b0e53aa41fe1c87796a401660b) 和 [Unity 模板](https://gist.github.com/ctzcs/d4c7730cf6cd984fe6f9e0e3f108a0f1)
 > *你的扩展？如果你正在开发 DragonECS 的扩展，可以[在此处发布](#反馈).
+
+# 快速开始
+这两个脚本展示 DragonECS 的基础工作流：创建世界、构建管线、注入依赖、运行系统、通过方面查询实体、通过池修改组件，以及释放资源。
+
+**EcsRoot.cs**
+```c#
+using DCFApixels.DragonECS;
+using UnityEngine;
+
+public sealed class EcsRoot : MonoBehaviour
+{
+    private EcsWorld _world;
+    private EcsPipeline _pipeline;
+
+    private void Start()
+    {
+        // 世界存储实体和组件。
+        _world = new EcsWorld();
+
+        // 管线存储系统并管理它们的生命周期。
+        _pipeline = EcsPipeline.New()
+            // 将依赖注入到实现 IEcsInject<T> 的系统中。
+            .Inject(_world)
+            // 按需要的顺序添加项目系统。
+            .Add(new MovementSystem())
+            // 构建管线并调用 IEcsPreInit/IEcsInit。
+            .BuildAndInit();
+    }
+
+    private void Update()
+    {
+        // 调用所有 run 系统的 IEcsRun.Run()。
+        _pipeline.Run();
+    }
+
+    private void OnDestroy()
+    {
+        // 调用 IEcsDestroy.Destroy() 并释放框架资源。
+        _pipeline.Destroy();
+        _world.Destroy();
+    }
+}
+```
+
+**MovementSystem.cs**
+```c#
+using DCFApixels.DragonECS;
+
+public struct Pose : IEcsComponent
+{
+    public float X;
+    public float Y;
+}
+
+public struct Velocity : IEcsComponent
+{
+    public float X;
+    public float Y;
+}
+
+public struct FreezedTag : IEcsTagComponent { }
+
+public sealed class MovementSystem : IEcsRun, IEcsInject<EcsWorld>
+{
+    private EcsWorld _world;
+
+    private class Aspect : EcsAspect
+    {
+        // Inc：实体必须拥有该组件，同时缓存该池。
+        public EcsPool<Pose> Poses = Inc;
+        public EcsPool<Velocity> Velocities = Inc;
+
+        // Exc：实体不能拥有该组件。
+        public EcsTagPool<FreezedTag> FreezedTags = Exc;
+    }
+
+    public void Inject(EcsWorld world)
+    {
+        _world = world;
+    }
+
+    public void Run()
+    {
+        // Where 返回所有匹配方面掩码的实体。
+        foreach (int e in _world.Where(out Aspect a))
+        {
+            ref Pose pose = ref a.Poses.Get(e);
+            ref readonly Velocity velocity = ref a.Velocities.Read(e);
+
+            pose.X += velocity.X;
+            pose.Y += velocity.Y;
+        }
+    }
+}
+```
 
 
 # 基础概念
